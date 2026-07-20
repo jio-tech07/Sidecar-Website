@@ -1685,7 +1685,7 @@ function generateUID(prefix, array) {
 }
 
 // 1. Customer Form Submit
-document.getElementById('form-customer').addEventListener('submit', (e) => {
+document.getElementById('form-customer').addEventListener('submit', async (e) => {
     e.preventDefault();
     const id = document.getElementById('cust-id').value;
     const name = document.getElementById('cust-name').value;
@@ -1703,6 +1703,7 @@ document.getElementById('form-customer').addEventListener('submit', (e) => {
     else if (status === 'Welding Job') projectType = 'Welding';
 
     let customerIdToSave = id;
+    const todayLocalDate = getLocalDateString();
 
     if (id) {
         // Edit Mode
@@ -1724,14 +1725,21 @@ document.getElementById('form-customer').addEventListener('submit', (e) => {
                 description, totalAmount, downpayment, partialPayment, buildStatus: finalStatus
             };
 
-            // Log partial payment / downpayment increases if updated during edit
-            if (partialPayment > oldPartial) {
-                const addedPartial = partialPayment - oldPartial;
-                logMoneyInForDate(addedPartial, `Partial payment from customer: ${name} (ID: ${id})`);
-            }
-            if (downpayment > oldDown) {
-                const addedDown = downpayment - oldDown;
-                logMoneyInForDate(addedDown, `Additional downpayment from customer: ${name} (ID: ${id})`);
+            // Log partial payment / downpayment / full payment increases if updated during edit
+            if (finalStatus === 'Released' && oldStatus !== 'Released') {
+                const remainingToPay = Math.max(0, totalAmount - (oldDown + oldPartial));
+                if (remainingToPay > 0) {
+                    await logMoneyInForDate(remainingToPay, `Full payment on release: ${name} (ID: ${id})`, todayLocalDate);
+                }
+            } else {
+                if (partialPayment > oldPartial) {
+                    const addedPartial = partialPayment - oldPartial;
+                    await logMoneyInForDate(addedPartial, `Partial payment from customer: ${name} (ID: ${id})`, todayLocalDate);
+                }
+                if (downpayment > oldDown) {
+                    const addedDown = downpayment - oldDown;
+                    await logMoneyInForDate(addedDown, `Additional downpayment from customer: ${name} (ID: ${id})`, todayLocalDate);
+                }
             }
 
             // Sync name change across other collections
@@ -1953,22 +1961,28 @@ document.getElementById('form-customer').addEventListener('submit', (e) => {
                 });
             }, 500);
         }
-    }
 
-    if (!id) {
-        if (downpayment > 0) {
-            logMoneyInForDate(downpayment, `Downpayment from customer: ${name} (ID: ${customerIdToSave})`);
-        }
-        if (partialPayment > 0) {
-            logMoneyInForDate(partialPayment, `Partial payment from customer: ${name} (ID: ${customerIdToSave})`);
+        // Log Money In for newly added customer payments
+        if (finalStatus === 'Released') {
+            if (totalAmount > 0) {
+                await logMoneyInForDate(totalAmount, `Full payment from customer: ${name} (ID: ${customerIdToSave})`, todayLocalDate);
+            }
+        } else {
+            if (downpayment > 0) {
+                await logMoneyInForDate(downpayment, `Downpayment from customer: ${name} (ID: ${customerIdToSave})`, todayLocalDate);
+            }
+            if (partialPayment > 0) {
+                await logMoneyInForDate(partialPayment, `Partial payment from customer: ${name} (ID: ${customerIdToSave})`, todayLocalDate);
+            }
         }
     }
 
     const savedCustomer = state.customers.find(c => c.id === customerIdToSave);
-    saveDocToFirestore(COLLECTIONS.CUSTOMERS, savedCustomer);
+    await saveDocToFirestore(COLLECTIONS.CUSTOMERS, savedCustomer);
 
     closeFormModal('modal-customer');
     renderAllDashboardData();
+    renderDailyTraffic();
     switchDashboardTab('tab-customers');
 });
 
