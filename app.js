@@ -248,12 +248,66 @@ async function deleteTrafficTransaction(type, txId) {
     else renderMoneyOutList();
 }
 
+// Helper to combine manual traffic money-in transactions and customer payments for a date
+function getCombinedMoneyInTransactions(dateStr) {
+    const record = (state.dailyTraffic || []).find(t => t.id === dateStr);
+    const existingList = record ? [...(record.moneyInTransactions || [])] : [];
+    
+    // Scan all customer records in state.customers
+    (state.customers || []).forEach(c => {
+        const custDate = c.date || (c.created_at ? c.created_at.split('T')[0] : '');
+        if (custDate === dateStr) {
+            // Check if this customer payment is already recorded in existingList
+            const isAlreadyLogged = existingList.some(tx => 
+                (tx.note && (tx.note.includes(c.id) || tx.note.includes(c.name))) || (tx.id && tx.id.includes(c.id))
+            );
+            
+            if (!isAlreadyLogged) {
+                if (c.status === 'Released' && (c.totalAmount || 0) > 0) {
+                    existingList.push({
+                        id: `auto_cust_full_${c.id}`,
+                        amount: c.totalAmount,
+                        note: `Full payment from customer: ${c.name} (${c.id})`,
+                        created_at: c.created_at || c.date || new Date().toISOString(),
+                        isAutoCustomer: true
+                    });
+                } else {
+                    if ((c.downpayment || 0) > 0) {
+                        existingList.push({
+                            id: `auto_cust_down_${c.id}`,
+                            amount: c.downpayment,
+                            note: `Downpayment from customer: ${c.name} (${c.id})`,
+                            created_at: c.created_at || c.date || new Date().toISOString(),
+                            isAutoCustomer: true
+                        });
+                    }
+                    if ((c.partialPayment || 0) > 0) {
+                        existingList.push({
+                            id: `auto_cust_partial_${c.id}`,
+                            amount: c.partialPayment,
+                            note: `Partial payment from customer: ${c.name} (${c.id})`,
+                            created_at: c.created_at || c.date || new Date().toISOString(),
+                            isAutoCustomer: true
+                        });
+                    }
+                }
+            }
+        }
+    });
+    
+    return existingList;
+}
+
 // Calculate cash flow summary for a given date, including net daily earning carryover from previous dates
 function getDailyTrafficSummary(targetDateStr) {
     if (!targetDateStr) targetDateStr = getLocalDateString();
     
-    // Gather all unique date strings from state.dailyTraffic plus targetDateStr
+    // Gather all unique date strings from state.dailyTraffic plus customer dates plus targetDateStr
     const datesSet = new Set((state.dailyTraffic || []).map(t => t.id));
+    (state.customers || []).forEach(c => {
+        const d = c.date || (c.created_at ? c.created_at.split('T')[0] : '');
+        if (d) datesSet.add(d);
+    });
     datesSet.add(targetDateStr);
     
     // Sort dates chronologically in ascending order
@@ -268,8 +322,9 @@ function getDailyTrafficSummary(targetDateStr) {
     for (let i = 0; i < datesToProcess.length; i++) {
         const d = datesToProcess[i];
         const record = (state.dailyTraffic || []).find(t => t.id === d);
+        const combinedInList = getCombinedMoneyInTransactions(d);
         
-        const organicIn = record ? (record.moneyInTransactions || []).reduce((sum, t) => sum + (parseFloat(t.amount) || 0), 0) : 0;
+        const organicIn = combinedInList.reduce((sum, t) => sum + (parseFloat(t.amount) || 0), 0);
         const totalOut = record ? (record.moneyOutTransactions || []).reduce((sum, t) => sum + (parseFloat(t.amount) || 0), 0) : 0;
         const carryover = i > 0 ? previousNetEarnings : 0;
         const totalIn = organicIn + carryover;
@@ -483,14 +538,13 @@ function openMoneyInModal() {
 
 function renderMoneyInList() {
     const dateStr = state.activeTrafficDate || getLocalDateString();
-    const record = state.dailyTraffic.find(t => t.id === dateStr);
     const summary = getDailyTrafficSummary(dateStr);
     
     const tbody = document.getElementById('money-in-table-body');
     if (!tbody) return;
     tbody.innerHTML = '';
     
-    const list = record ? (record.moneyInTransactions || []) : [];
+    const list = getCombinedMoneyInTransactions(dateStr);
     const hasCarryover = summary.previousDateStr !== null && summary.carryover !== 0;
     
     if (list.length === 0 && !hasCarryover) {
@@ -517,13 +571,15 @@ function renderMoneyInList() {
     }
     
     list.forEach(tx => {
+        let actionBtn = `<button type="button" class="btn-icon delete" style="padding: 4px 8px;" onclick="deleteTrafficTransaction('in', '${tx.id}')"><i class="fa-solid fa-trash"></i></button>`;
+        if (tx.isAutoCustomer) {
+            actionBtn = `<span style="font-size: 10px; padding: 2px 6px; background: rgba(59, 130, 246, 0.15); border-radius: 4px; color: var(--accent); text-transform: uppercase; font-weight: 600;">Customer</span>`;
+        }
         tbody.innerHTML += `
             <tr style="border-bottom: 1px solid rgba(255,255,255,0.04);">
                 <td style="padding: 10px; text-align: left; font-weight: 500;">${tx.note}</td>
                 <td style="padding: 10px; text-align: right; font-family: monospace; font-weight: 600; color: var(--success);">₱${tx.amount.toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
-                <td style="padding: 10px; text-align: center;">
-                    <button type="button" class="btn-icon delete" style="padding: 4px 8px;" onclick="deleteTrafficTransaction('in', '${tx.id}')"><i class="fa-solid fa-trash"></i></button>
-                </td>
+                <td style="padding: 10px; text-align: center;">${actionBtn}</td>
             </tr>
         `;
     });
