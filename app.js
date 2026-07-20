@@ -5779,6 +5779,19 @@ window.addEventListener('DOMContentLoaded', async () => {
             state.inquiries.push(newInq);
             await saveDocToFirestore(COLLECTIONS.INQUIRIES, newInq);
 
+            // Log Google Analytics Lead Event
+            if (typeof gtag === 'function') {
+                try {
+                    gtag('event', 'generate_lead', {
+                        event_category: 'Inquiry',
+                        event_label: service,
+                        value: 1
+                    });
+                } catch (e) {
+                    console.warn("GA event tracking:", e);
+                }
+            }
+
             // Populate the receipt modal fields
             document.getElementById('receipt-id').textContent = newId;
             document.getElementById('receipt-date').textContent = date;
