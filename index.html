@@ -1039,13 +1039,29 @@
                 </div>
 
                 <div class="form-row">
-                    <div class="form-group">
+                    <div class="form-group" style="flex: 1;">
                         <label for="cust-total-amount">Total Amount (₱)</label>
-                        <input type="number" id="cust-total-amount" required placeholder="e.g. 45000">
+                        <input type="number" id="cust-total-amount" min="0" step="0.01" required placeholder="e.g. 45000">
                     </div>
-                    <div class="form-group">
+                    <div class="form-group" style="flex: 1;">
                         <label for="cust-downpayment">Downpayment (₱)</label>
-                        <input type="number" id="cust-downpayment" required placeholder="e.g. 15000">
+                        <input type="number" id="cust-downpayment" min="0" step="0.01" required placeholder="e.g. 15000">
+                    </div>
+                    <div class="form-group" style="flex: 1;">
+                        <label for="cust-partial-payment">Partial Payment (₱)</label>
+                        <input type="number" id="cust-partial-payment" min="0" step="0.01" placeholder="e.g. 10000">
+                    </div>
+                </div>
+
+                <!-- Live Payment Summary Box -->
+                <div id="cust-payment-summary-box" style="margin-top: -5px; margin-bottom: 15px; padding: 12px 16px; background: rgba(59, 130, 246, 0.08); border: 1px dashed rgba(59, 130, 246, 0.3); border-radius: 8px; font-size: 13px;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+                        <span style="color: var(--text-secondary); font-weight: 500;"><i class="fa-solid fa-coins" style="color: var(--success); margin-right: 6px;"></i>Total Paid (Down + Partial):</span>
+                        <strong id="cust-summary-total-paid" style="color: var(--success); font-family: monospace; font-size: 14px;">₱0.00</strong>
+                    </div>
+                    <div style="display: flex; justify-content: space-between; align-items: center;">
+                        <span style="color: var(--text-secondary); font-weight: 500;"><i class="fa-solid fa-scale-balanced" style="color: var(--warning); margin-right: 6px;"></i>Remaining Balance:</span>
+                        <strong id="cust-summary-balance" style="color: var(--warning); font-family: monospace; font-size: 14px;">₱0.00</strong>
                     </div>
                 </div>
 

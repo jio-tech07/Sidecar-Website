@@ -1424,6 +1424,34 @@ function resolveWelder(nameInput) {
     return { id: newId, name: trimmed };
 }
 
+// Helper to update live payment calculation box in customer modal
+function updateCustomerPaymentSummary() {
+    const totalEl = document.getElementById('cust-total-amount');
+    const downEl = document.getElementById('cust-downpayment');
+    const partialEl = document.getElementById('cust-partial-payment');
+    
+    const totalPaidEl = document.getElementById('cust-summary-total-paid');
+    const balanceEl = document.getElementById('cust-summary-balance');
+    
+    if (!totalEl || !downEl || !partialEl || !totalPaidEl || !balanceEl) return;
+    
+    const total = parseFloat(totalEl.value) || 0;
+    const down = parseFloat(downEl.value) || 0;
+    const partial = parseFloat(partialEl.value) || 0;
+    
+    const totalPaid = down + partial;
+    const balance = Math.max(0, total - totalPaid);
+    
+    totalPaidEl.textContent = `₱${totalPaid.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+    balanceEl.textContent = `₱${balance.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+    
+    if (balance <= 0 && total > 0) {
+        balanceEl.style.color = 'var(--success)';
+    } else {
+        balanceEl.style.color = 'var(--warning)';
+    }
+}
+
 // Form state resets for addition
 function setupFormAdd(modalId) {
     currentUploadedImageBase64 = '';
@@ -1433,6 +1461,9 @@ function setupFormAdd(modalId) {
         document.getElementById('form-customer').reset();
         document.getElementById('cust-id').value = '';
         document.getElementById('cust-desc').value = '';
+        const partialInput = document.getElementById('cust-partial-payment');
+        if (partialInput) partialInput.value = '';
+        updateCustomerPaymentSummary();
     }
     else if (modalId === 'modal-build') {
         document.getElementById('modal-build-title').textContent = activeTab === 'tab-past-builds' ? 'Add Past Build' : 'Add On-Process Build';
@@ -1517,6 +1548,9 @@ function setupFormEdit(modalId, id) {
         document.getElementById('cust-status').value = item.status;
         document.getElementById('cust-total-amount').value = item.totalAmount || '';
         document.getElementById('cust-downpayment').value = item.downpayment || '';
+        const partialInput = document.getElementById('cust-partial-payment');
+        if (partialInput) partialInput.value = item.partialPayment || '';
+        updateCustomerPaymentSummary();
     }
     else if (modalId === 'modal-build') {
         const item = state.builds.find(x => x.id === id);
@@ -1662,6 +1696,7 @@ document.getElementById('form-customer').addEventListener('submit', (e) => {
 
     let totalAmount = parseFloat(document.getElementById('cust-total-amount').value) || 0;
     let downpayment = parseFloat(document.getElementById('cust-downpayment').value) || 0;
+    let partialPayment = parseFloat(document.getElementById('cust-partial-payment').value) || 0;
 
     let projectType = 'Sidecar';
     if (status === 'Repair') projectType = 'Repair';
@@ -1674,6 +1709,8 @@ document.getElementById('form-customer').addEventListener('submit', (e) => {
         const idx = state.customers.findIndex(x => x.id === id);
         if (idx !== -1) {
             const oldStatus = state.customers[idx].status || 'On Process';
+            const oldDown = state.customers[idx].downpayment || 0;
+            const oldPartial = state.customers[idx].partialPayment || 0;
             
             // Safeguard: If the downpayment is equal to total amount, do not automatically change the status to Released.
             // Only change to Released if the user explicitly selected Released.
@@ -1684,8 +1721,18 @@ document.getElementById('form-customer').addEventListener('submit', (e) => {
 
             state.customers[idx] = {
                 ...state.customers[idx], name, phone, email, status: finalStatus,
-                description, totalAmount, downpayment, buildStatus: finalStatus
+                description, totalAmount, downpayment, partialPayment, buildStatus: finalStatus
             };
+
+            // Log partial payment / downpayment increases if updated during edit
+            if (partialPayment > oldPartial) {
+                const addedPartial = partialPayment - oldPartial;
+                logMoneyInForDate(addedPartial, `Partial payment from customer: ${name} (ID: ${id})`);
+            }
+            if (downpayment > oldDown) {
+                const addedDown = downpayment - oldDown;
+                logMoneyInForDate(addedDown, `Additional downpayment from customer: ${name} (ID: ${id})`);
+            }
 
             // Sync name change across other collections
             let buildExists = false;
@@ -1775,7 +1822,8 @@ document.getElementById('form-customer').addEventListener('submit', (e) => {
         const newCust = {
             id: newId, name, phone, email, status: finalStatus,
             date: new Date().toISOString().split('T')[0],
-            projectType, totalAmount, downpayment, buildStatus: finalStatus, description
+            created_at: new Date().toISOString(),
+            projectType, totalAmount, downpayment, partialPayment, buildStatus: finalStatus, description
         };
         state.customers.push(newCust);
 
@@ -1808,8 +1856,8 @@ document.getElementById('form-customer').addEventListener('submit', (e) => {
                     phone: phone,
                     email: email,
                     description: description || `Standard Sidecar order for ${name}`,
-                    downpayment: downpayment,
-                    balance: totalAmount - downpayment,
+                    downpayment: downpayment + partialPayment,
+                    balance: Math.max(0, totalAmount - (downpayment + partialPayment)),
                     totalCost: totalAmount,
                     dateAdded: todayStr
                 });
@@ -1836,8 +1884,8 @@ document.getElementById('form-customer').addEventListener('submit', (e) => {
                     phone: phone,
                     email: email,
                     description: description || `Repair for ${name}`,
-                    downpayment: downpayment,
-                    balance: totalAmount - downpayment,
+                    downpayment: downpayment + partialPayment,
+                    balance: Math.max(0, totalAmount - (downpayment + partialPayment)),
                     totalCost: totalAmount,
                     dateAdded: todayStr
                 });
@@ -1868,8 +1916,8 @@ document.getElementById('form-customer').addEventListener('submit', (e) => {
                     phone: phone,
                     email: email,
                     description: description || `Welding Job for ${name}`,
-                    downpayment: downpayment,
-                    balance: totalAmount - downpayment,
+                    downpayment: downpayment + partialPayment,
+                    balance: Math.max(0, totalAmount - (downpayment + partialPayment)),
                     totalCost: totalAmount,
                     dateAdded: todayStr
                 });
@@ -1910,6 +1958,9 @@ document.getElementById('form-customer').addEventListener('submit', (e) => {
     if (!id) {
         if (downpayment > 0) {
             logMoneyInForDate(downpayment, `Downpayment from customer: ${name} (ID: ${customerIdToSave})`);
+        }
+        if (partialPayment > 0) {
+            logMoneyInForDate(partialPayment, `Partial payment from customer: ${name} (ID: ${customerIdToSave})`);
         }
     }
 
@@ -2868,11 +2919,24 @@ function renderCustomersTable() {
         return;
     }
 
-    filtered.forEach(c => {
+    // Sort newest-first (latest at the top, first created at the bottom)
+    const sorted = [...filtered].sort((a, b) => {
+        if (a.created_at && b.created_at) {
+            return new Date(b.created_at) - new Date(a.created_at);
+        }
+        const numA = parseInt((a.id || '').replace(/\D/g, '')) || 0;
+        const numB = parseInt((b.id || '').replace(/\D/g, '')) || 0;
+        if (numA !== numB) return numB - numA;
+        return (b.date || '').localeCompare(a.date || '');
+    });
+
+    sorted.forEach(c => {
         const type = c.projectType || 'Sidecar';
         const total = c.totalAmount || 0;
         const down = c.downpayment || 0;
-        const balance = total - down;
+        const partial = c.partialPayment || 0;
+        const totalPaid = down + partial;
+        const balance = Math.max(0, total - totalPaid);
 
         // Status Badge logic
         let badgeClass = 'badge-warning';
@@ -2963,7 +3027,10 @@ function renderCustomersTable() {
                 <td style="max-width: 180px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: 13px; color: var(--text-secondary);" title="${c.description || ''}">${c.description || 'N/A'}</td>
                 <td><span style="font-weight: 500; font-size: 12px; color: ${type === 'Sidecar' ? 'var(--text-secondary)' : 'var(--info)'}">${type}</span></td>
                 <td>₱${total.toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
-                <td>₱${down.toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
+                <td>
+                    <span>₱${down.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
+                    ${partial > 0 ? `<div style="font-size: 11px; color: var(--success); font-weight: 600; margin-top: 2px;">+₱${partial.toLocaleString(undefined, { minimumFractionDigits: 2 })} Partial</div>` : ''}
+                </td>
                 <td style="font-weight: 600; color: ${balance > 0 ? 'var(--warning)' : 'var(--success)'}">₱${balance.toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
                 <td><span class="badge ${badgeClass}">${statusLabel}</span></td>
                 <td>${c.date}</td>
@@ -4973,14 +5040,16 @@ async function releaseCustomerUnit(customerId, workDescription, type, recordId) 
 
     const totalCost = customer.totalAmount || 0;
     const downpayment = customer.downpayment || 0;
+    const partialPayment = customer.partialPayment || 0;
+    const totalPaidSoFar = downpayment + partialPayment;
     let fullPayment = 0;
 
-    if (downpayment >= totalCost) {
+    if (totalPaidSoFar >= totalCost) {
         fullPayment = 0;
-        alert(`Downpayment (₱${downpayment.toLocaleString(undefined, { minimumFractionDigits: 2 })}) equals or exceeds Total Cost (₱${totalCost.toLocaleString(undefined, { minimumFractionDigits: 2 })}).\nPermission to release is granted!`);
+        alert(`Total Paid (Downpayment: ₱${downpayment.toLocaleString(undefined, { minimumFractionDigits: 2 })} + Partial: ₱${partialPayment.toLocaleString(undefined, { minimumFractionDigits: 2 })}) equals or exceeds Total Cost (₱${totalCost.toLocaleString(undefined, { minimumFractionDigits: 2 })}).\nPermission to release is granted!`);
     } else {
-        const remaining = totalCost - downpayment;
-        const promptMsg = `Releasing Unit for ${customer.name}\nTotal Cost: ₱${totalCost.toLocaleString(undefined, { minimumFractionDigits: 2 })}\nDownpayment Paid: ₱${downpayment.toLocaleString(undefined, { minimumFractionDigits: 2 })}\n\nRemaining Balance to Pay: ₱${remaining.toLocaleString(undefined, { minimumFractionDigits: 2 })}\n\nPlease enter the Full Payment amount:`;
+        const remaining = Math.max(0, totalCost - totalPaidSoFar);
+        const promptMsg = `Releasing Unit for ${customer.name}\nTotal Cost: ₱${totalCost.toLocaleString(undefined, { minimumFractionDigits: 2 })}\nDownpayment Paid: ₱${downpayment.toLocaleString(undefined, { minimumFractionDigits: 2 })}\nPartial Payment Paid: ₱${partialPayment.toLocaleString(undefined, { minimumFractionDigits: 2 })}\nTotal Paid So Far: ₱${totalPaidSoFar.toLocaleString(undefined, { minimumFractionDigits: 2 })}\n\nRemaining Balance to Pay: ₱${remaining.toLocaleString(undefined, { minimumFractionDigits: 2 })}\n\nPlease enter the Full Payment amount:`;
         
         const fullPaymentInput = prompt(promptMsg, remaining);
         if (fullPaymentInput === null) {
@@ -4988,8 +5057,8 @@ async function releaseCustomerUnit(customerId, workDescription, type, recordId) 
         }
 
         fullPayment = parseFloat(fullPaymentInput);
-        if (isNaN(fullPayment) || Math.abs((downpayment + fullPayment) - totalCost) > 0.01) {
-            alert(`Error: The math does not add up!\nDownpayment (₱${downpayment.toLocaleString(undefined, { minimumFractionDigits: 2 })}) + Full Payment (₱${(fullPayment || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}) must equal the Total Cost (₱${totalCost.toLocaleString(undefined, { minimumFractionDigits: 2 })}).`);
+        if (isNaN(fullPayment) || Math.abs((totalPaidSoFar + fullPayment) - totalCost) > 0.01) {
+            alert(`Error: The math does not add up!\nTotal Paid So Far (₱${totalPaidSoFar.toLocaleString(undefined, { minimumFractionDigits: 2 })}) + Full Payment (₱${(fullPayment || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}) must equal the Total Cost (₱${totalCost.toLocaleString(undefined, { minimumFractionDigits: 2 })}).`);
             return false;
         }
     }
