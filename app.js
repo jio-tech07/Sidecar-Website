@@ -3136,7 +3136,18 @@ function renderBuildsCards() {
         return;
     }
 
-    filtered.forEach(b => {
+    // Sort newest-first (latest at top, oldest at bottom)
+    const sorted = [...filtered].sort((a, b) => {
+        if (a.created_at && b.created_at) {
+            return new Date(b.created_at) - new Date(a.created_at);
+        }
+        const numA = parseInt((a.id || '').replace(/\D/g, '')) || 0;
+        const numB = parseInt((b.id || '').replace(/\D/g, '')) || 0;
+        if (numA !== numB) return numB - numA;
+        return (b.start || b.target || '').localeCompare(a.start || a.target || '');
+    });
+
+    sorted.forEach(b => {
         const isCompleted = b.progress >= 100;
         const progressLabel = isCompleted ? 'Completed' : `${b.progress}% Complete`;
         const progressBarColor = isCompleted ? 'var(--success)' : 'var(--accent)';
@@ -3187,7 +3198,18 @@ function renderPastBuildsCards() {
         return;
     }
 
-    filtered.forEach(b => {
+    // Sort newest-first (latest at top, oldest at bottom)
+    const sorted = [...filtered].sort((a, b) => {
+        if (a.created_at && b.created_at) {
+            return new Date(b.created_at) - new Date(a.created_at);
+        }
+        const numA = parseInt((a.id || '').replace(/\D/g, '')) || 0;
+        const numB = parseInt((b.id || '').replace(/\D/g, '')) || 0;
+        if (numA !== numB) return numB - numA;
+        return (b.released || b.target || '').localeCompare(a.released || a.target || '');
+    });
+
+    sorted.forEach(b => {
         tbody.innerHTML += `
             <tr class="clickable-row" onclick="openBuildDetails('${b.id}')">
                 <td><strong class="text-glow" style="color: var(--accent); font-family: monospace;">${b.id}</strong></td>
@@ -3222,7 +3244,18 @@ function renderRepairsTable() {
         return;
     }
 
-    filtered.forEach(r => {
+    // Sort newest-first (latest at top, oldest at bottom)
+    const sorted = [...filtered].sort((a, b) => {
+        if (a.created_at && b.created_at) {
+            return new Date(b.created_at) - new Date(a.created_at);
+        }
+        const numA = parseInt((a.id || '').replace(/\D/g, '')) || 0;
+        const numB = parseInt((b.id || '').replace(/\D/g, '')) || 0;
+        if (numA !== numB) return numB - numA;
+        return (b.date || '').localeCompare(a.date || '');
+    });
+
+    sorted.forEach(r => {
         let badgeClass = 'badge-info';
         let statusText = r.status;
         if (r.status === 'Received') badgeClass = 'badge-danger';
@@ -3282,7 +3315,18 @@ function renderWeldingJobsTable() {
         return;
     }
 
-    filtered.forEach(w => {
+    // Sort newest-first (latest at top, oldest at bottom)
+    const sorted = [...filtered].sort((a, b) => {
+        if (a.created_at && b.created_at) {
+            return new Date(b.created_at) - new Date(a.created_at);
+        }
+        const numA = parseInt((a.id || '').replace(/\D/g, '')) || 0;
+        const numB = parseInt((b.id || '').replace(/\D/g, '')) || 0;
+        if (numA !== numB) return numB - numA;
+        return (b.date || '').localeCompare(a.date || '');
+    });
+
+    sorted.forEach(w => {
         tbody.innerHTML += `
             <tr>
                 <td><strong>${w.id}</strong></td>
