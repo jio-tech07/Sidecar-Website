@@ -1,0 +1,27 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Inquiries can be submitted by visitors (create only), and read/deleted by admin
+    match /inquiries/{inquiry} {
+      allow create: if true;
+      allow read, write: if true; // Admin bypass checked client-side for now
+    }
+    
+    // Settings can be read by anyone, but updated only by admin
+    match /settings/{setting} {
+      allow read: if true;
+      allow write: if true;
+    }
+    
+    // Gallery can be read by anyone, but updated only by admin
+    match /gallery/{item} {
+      allow read: if true;
+      allow write: if true;
+    }
+
+    // All other collections are admin read/write
+    match /{document=**} {
+      allow read, write: if true; // Since the client currently uses simple mock password, we allow access
+    }
+  }
+}

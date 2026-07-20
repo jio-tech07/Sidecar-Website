@@ -1,0 +1,17 @@
+{
+  "firestore": {
+    "rules": "firestore.rules"
+  },
+  "hosting": {
+    "public": ".",
+    "ignore": [
+      "firebase.json",
+      "firestore.rules",
+      "package.json",
+      "package-lock.json",
+      "temp_tool/**",
+      "node_modules/**",
+      "**/.*"
+    ]
+  }
+}
