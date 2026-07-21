@@ -1290,12 +1290,12 @@ function switchDashboardTab(tabId) {
             case 'tab-builds':
                 currentTabTitle.textContent = "On-Process Sidecar Builds";
                 currentTabDesc.textContent = "Monitor fabrication specifications and progression charts.";
-                btnQuickAdd.innerHTML = `<i class="fa-solid fa-hammer"></i> Add Build`;
+                btnQuickAdd.style.display = 'none';
                 break;
             case 'tab-past-builds':
                 currentTabTitle.textContent = "Past Builds Archive";
                 currentTabDesc.textContent = "View and manage completed and released sidecar fabrication projects.";
-                btnQuickAdd.innerHTML = `<i class="fa-solid fa-hammer"></i> Add Past Build`;
+                btnQuickAdd.style.display = 'none';
                 break;
             case 'tab-repairs':
                 currentTabTitle.textContent = "Repair Jobs Log";
