@@ -1571,10 +1571,11 @@ function setupFormAdd(modalId) {
         document.getElementById('welder-id').value = '';
     }
     else if (modalId === 'modal-gallery') {
-        document.getElementById('modal-gallery-title').textContent = 'Add Gallery Item';
+        document.getElementById('modal-gallery-title').textContent = 'Add Gallery Album';
         document.getElementById('form-gallery').reset();
         document.getElementById('gallery-id').value = '';
-        galleryImagePreview.innerHTML = `<i class="fa-regular fa-image"></i><p>No image chosen</p>`;
+        currentGalleryDraftPhotos = [];
+        renderGalleryDraftPhotos();
     }
     else if (modalId === 'modal-material') {
         document.getElementById('modal-material-title').textContent = 'Add Material';
@@ -1680,19 +1681,14 @@ function setupFormEdit(modalId, id) {
     else if (modalId === 'modal-gallery') {
         const item = state.gallery.find(x => x.id === id);
         if (!item) return;
-        document.getElementById('modal-gallery-title').textContent = 'Edit Gallery Item';
+        document.getElementById('modal-gallery-title').textContent = 'Edit Gallery Album';
         document.getElementById('gallery-id').value = item.id;
         document.getElementById('gallery-title').value = item.title;
         document.getElementById('gallery-category').value = item.category;
-        document.getElementById('gallery-desc').value = item.desc;
+        document.getElementById('gallery-desc').value = item.desc || '';
 
-        if (item.image) {
-            currentUploadedImageBase64 = item.image;
-            galleryImagePreview.innerHTML = `<img src="${item.image}" alt="${item.title}">`;
-        } else {
-            currentUploadedImageBase64 = '';
-            galleryImagePreview.innerHTML = `<i class="fa-regular fa-image"></i><p>No image chosen</p>`;
-        }
+        currentGalleryDraftPhotos = getAlbumImages(item).map(img => ({ ...img }));
+        renderGalleryDraftPhotos();
     }
     else if (modalId === 'modal-material') {
         const item = state.materials.find(x => x.id === id);
@@ -2291,6 +2287,7 @@ document.getElementById('form-gallery').addEventListener('submit', (e) => {
     const desc = document.getElementById('gallery-desc').value;
 
     let galleryIdToSave = id;
+    const coverPhoto = currentGalleryDraftPhotos[0] ? currentGalleryDraftPhotos[0].url : '';
 
     if (id) {
         // Edit Mode
@@ -2301,7 +2298,8 @@ document.getElementById('form-gallery').addEventListener('submit', (e) => {
                 title,
                 category,
                 desc,
-                image: currentUploadedImageBase64 || state.gallery[idx].image
+                image: coverPhoto || state.gallery[idx].image || '',
+                images: currentGalleryDraftPhotos
             };
         }
     } else {
@@ -2313,7 +2311,8 @@ document.getElementById('form-gallery').addEventListener('submit', (e) => {
             title,
             category,
             desc,
-            image: currentUploadedImageBase64
+            image: coverPhoto,
+            images: currentGalleryDraftPhotos
         });
     }
 
@@ -3415,35 +3414,42 @@ function renderGalleryCardsAdmin() {
     }
 
     filtered.forEach(g => {
+        const images = getAlbumImages(g);
+        const coverUrl = images[0] ? images[0].url : g.image;
+        const photoCount = images.length;
+
         let imgTag = `
             <div class="build-card-img-placeholder">
-                <i class="fa-regular fa-image"></i>
-                <p>No picture uploaded</p>
+                <i class="fa-regular fa-images"></i>
+                <p>No pictures uploaded</p>
             </div>
         `;
 
-        if (g.image) {
-            imgTag = `<img src="${g.image}" alt="${g.title}" class="build-card-img">`;
+        if (coverUrl) {
+            imgTag = `<img src="${coverUrl}" alt="${g.title}" class="build-card-img">`;
         }
 
         container.innerHTML += `
             <div class="build-card-admin">
-                <div class="build-card-img-wrapper">
+                <div class="build-card-img-wrapper" style="position: relative;">
                     ${imgTag}
+                    <span style="position: absolute; top: 10px; right: 10px; background: rgba(0,0,0,0.75); color: var(--accent); padding: 4px 8px; border-radius: 6px; font-size: 11px; font-weight: 700; border: 1px solid var(--border-glow);">
+                        <i class="fa-solid fa-camera"></i> ${photoCount} Photo${photoCount === 1 ? '' : 's'}
+                    </span>
                 </div>
                 <div class="build-card-body">
                     <div class="build-card-client-info">
                         <span class="gallery-category">${g.category}</span>
                         <h4>${g.title}</h4>
-                        <p>Gallery Reference: <strong>${g.id}</strong></p>
+                        <p>Album Reference: <strong>${g.id}</strong></p>
                     </div>
-                    <div class="build-card-specs" title="${g.desc}">
-                        ${g.desc.substring(0, 80)}${g.desc.length > 80 ? '...' : ''}
+                    <div class="build-card-specs" title="${g.desc || ''}">
+                        ${(g.desc || '').substring(0, 80)}${(g.desc || '').length > 80 ? '...' : ''}
                     </div>
                     <div class="build-card-footer" style="margin-top: auto;">
                         <div class="table-actions-cell" style="width: 100%; justify-content: flex-end;">
-                            <button class="btn-icon" onclick="openFormModal('modal-gallery', '${g.id}')" title="Edit Gallery Item"><i class="fa-solid fa-pen-to-square"></i></button>
-                            <button class="btn-icon delete" onclick="deleteItem('gallery', '${g.id}')" title="Delete Gallery Item"><i class="fa-solid fa-trash"></i></button>
+                            <button class="btn-icon" onclick="openFormModal('modal-gallery', '${g.id}')" title="Edit Album Photos & Details"><i class="fa-solid fa-pen-to-square"></i></button>
+                            <button class="btn-icon delete" onclick="deleteItem('gallery', '${g.id}')" title="Delete Album"><i class="fa-solid fa-trash"></i></button>
                         </div>
                     </div>
                 </div>
@@ -4227,8 +4233,100 @@ if (btnAllLabor) btnAllLabor.addEventListener('click', () => switchDashboardTab(
 
 
 /* ==========================================================================
-   PUBLIC VISITOR GALLERY RENDER
+   PUBLIC VISITOR GALLERY ALBUMS & PHOTO LIGHTBOX RENDER
    ========================================================================== */
+
+let currentGalleryDraftPhotos = [];
+let currentActiveLightboxAlbumId = null;
+let currentActiveLightboxPhotoIndex = 0;
+
+function getAlbumImages(item) {
+    if (!item) return [];
+    if (Array.isArray(item.images) && item.images.length > 0) {
+        return item.images;
+    }
+    if (item.image) {
+        return [{
+            id: 'img_0',
+            url: item.image,
+            title: item.title || 'Model Photo',
+            description: item.desc || ''
+        }];
+    }
+    return [];
+}
+
+function handleGalleryPhotoUpload(event) {
+    const file = event.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (e) => {
+        const base64 = e.target.result;
+        currentGalleryDraftPhotos.push({
+            id: 'img_' + Date.now() + '_' + Math.floor(Math.random() * 1000),
+            url: base64,
+            title: '',
+            description: ''
+        });
+        renderGalleryDraftPhotos();
+        event.target.value = '';
+    };
+    reader.readAsDataURL(file);
+}
+
+function removeGalleryDraftPhoto(index) {
+    currentGalleryDraftPhotos.splice(index, 1);
+    renderGalleryDraftPhotos();
+}
+
+function updateGalleryDraftTitle(index, val) {
+    if (currentGalleryDraftPhotos[index]) {
+        currentGalleryDraftPhotos[index].title = val;
+    }
+}
+
+function updateGalleryDraftDesc(index, val) {
+    if (currentGalleryDraftPhotos[index]) {
+        currentGalleryDraftPhotos[index].description = val;
+    }
+}
+
+function renderGalleryDraftPhotos() {
+    const container = document.getElementById('album-photos-draft-list');
+    if (!container) return;
+    container.innerHTML = '';
+
+    if (currentGalleryDraftPhotos.length === 0) {
+        container.innerHTML = `
+            <div style="padding: 24px; text-align: center; color: var(--text-muted); background: rgba(0,0,0,0.2); border: 1px dashed var(--border-glow); border-radius: 8px;">
+                <i class="fa-regular fa-images" style="font-size: 28px; margin-bottom: 6px; display: block;"></i>
+                <p style="margin: 0; font-size: 13px;">No photos added to this album yet. Click <strong>"Add Photo to Album"</strong> above.</p>
+            </div>
+        `;
+        return;
+    }
+
+    currentGalleryDraftPhotos.forEach((photo, idx) => {
+        const isCover = idx === 0;
+        container.innerHTML += `
+            <div style="display: flex; gap: 12px; align-items: flex-start; padding: 12px; background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08); border-radius: 8px; position: relative;">
+                <div style="width: 90px; height: 90px; flex-shrink: 0; border-radius: 6px; overflow: hidden; position: relative; background: #000; border: 1px solid var(--border-glow);">
+                    <img src="${photo.url}" style="width: 100%; height: 100%; object-fit: cover;">
+                    ${isCover ? `<span style="position: absolute; bottom: 0; left: 0; right: 0; background: var(--accent); color: #000; font-size: 9px; font-weight: 800; text-align: center; text-transform: uppercase; padding: 2px 0;">Cover</span>` : ''}
+                </div>
+                
+                <div style="flex: 1; display: flex; flex-direction: column; gap: 8px;">
+                    <input type="text" placeholder="Photo Model Title (e.g. Front View Chrome)" value="${photo.title || ''}" onchange="updateGalleryDraftTitle(${idx}, this.value)" style="width: 100%; padding: 6px 10px; font-size: 13px; background: rgba(0,0,0,0.4); border: 1px solid var(--border-glow); border-radius: 4px; color: #fff;">
+                    <textarea rows="2" placeholder="Specific Model Description (e.g. Features double LED headlights and reinforced bumper chassis...)" onchange="updateGalleryDraftDesc(${idx}, this.value)" style="width: 100%; padding: 6px 10px; font-size: 12px; background: rgba(0,0,0,0.4); border: 1px solid var(--border-glow); border-radius: 4px; color: #fff; resize: vertical;">${photo.description || ''}</textarea>
+                </div>
+                
+                <button type="button" class="btn-icon delete" style="align-self: flex-start;" onclick="removeGalleryDraftPhoto(${idx})" title="Remove Photo">
+                    <i class="fa-solid fa-trash"></i>
+                </button>
+            </div>
+        `;
+    });
+}
 
 function renderVisitorGallery() {
     const galleryGrid = document.getElementById('visitor-gallery-grid');
@@ -4246,29 +4344,110 @@ function renderVisitorGallery() {
     }
 
     state.gallery.forEach(p => {
+        const images = getAlbumImages(p);
+        const coverUrl = images[0] ? images[0].url : p.image;
+        const photoCount = images.length;
+
         let imgTag = `
             <div class="gallery-placeholder">
                 <i class="fa-solid fa-motorcycle"></i>
                 <span>JMR Custom Project</span>
             </div>
         `;
-        if (p.image) {
-            imgTag = `<img src="${p.image}" alt="${p.title}" class="gallery-img">`;
+        if (coverUrl) {
+            imgTag = `<img src="${coverUrl}" alt="${p.title}" class="gallery-img">`;
         }
 
         galleryGrid.innerHTML += `
-            <div class="gallery-item">
-                <div class="gallery-img-wrapper">
+            <div class="gallery-item clickable-row" onclick="openGalleryAlbumViewer('${p.id}')" style="cursor: pointer; position: relative;">
+                <div class="gallery-img-wrapper" style="position: relative;">
                     ${imgTag}
+                    <span style="position: absolute; top: 12px; right: 12px; background: rgba(0,0,0,0.8); color: var(--accent); padding: 4px 10px; border-radius: 20px; font-size: 11px; font-weight: 700; border: 1px solid var(--border-glow); z-index: 2;">
+                        <i class="fa-solid fa-images"></i> ${photoCount} Photo${photoCount === 1 ? '' : 's'}
+                    </span>
                 </div>
                 <div class="gallery-details">
                     <span class="gallery-category">${p.category}</span>
                     <h3>${p.title}</h3>
-                    <p>${p.desc}</p>
+                    <p style="display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;">${p.desc || ''}</p>
+                    <div style="margin-top: 10px; color: var(--accent); font-size: 13px; font-weight: 600;">
+                        Open Album <i class="fa-solid fa-arrow-right" style="margin-left: 4px;"></i>
+                    </div>
                 </div>
             </div>
         `;
     });
+}
+
+function openGalleryAlbumViewer(albumId) {
+    const album = state.gallery.find(g => g.id === albumId);
+    if (!album) return;
+
+    document.getElementById('album-viewer-title').textContent = album.title;
+    document.getElementById('album-viewer-category').textContent = album.category;
+    document.getElementById('album-viewer-desc').textContent = album.desc || 'Collection of sidecar models and custom fabrication angles.';
+
+    const photosGrid = document.getElementById('album-viewer-photos-grid');
+    photosGrid.innerHTML = '';
+
+    const images = getAlbumImages(album);
+
+    if (images.length === 0) {
+        photosGrid.innerHTML = `<div style="grid-column: 1/-1; padding: 40px; text-align: center; color: var(--text-muted);">No photos available in this album.</div>`;
+    } else {
+        images.forEach((img, idx) => {
+            const photoTitle = img.title || `${album.title} - Photo ${idx + 1}`;
+            const photoDesc = img.description || album.desc || '';
+
+            photosGrid.innerHTML += `
+                <div class="album-photo-card" onclick="openPhotoDetailLightbox('${album.id}', ${idx})" style="background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08); border-radius: 10px; overflow: hidden; cursor: pointer; transition: transform 0.2s ease, border-color 0.2s ease;" onmouseover="this.style.borderColor='var(--accent)'; this.style.transform='translateY(-4px)'" onmouseout="this.style.borderColor='rgba(255,255,255,0.08)'; this.style.transform='none'">
+                    <div style="height: 160px; overflow: hidden; background: #000; position: relative;">
+                        <img src="${img.url}" alt="${photoTitle}" style="width: 100%; height: 100%; object-fit: cover;">
+                        <div style="position: absolute; inset: 0; background: rgba(0,0,0,0.3); display: flex; align-items: center; justify-content: center; opacity: 0; transition: opacity 0.2s ease;" onmouseover="this.style.opacity='1'" onmouseout="this.style.opacity='0'">
+                            <span style="background: var(--accent); color: #000; padding: 6px 12px; border-radius: 20px; font-size: 12px; font-weight: 700;"><i class="fa-solid fa-magnifying-glass-plus"></i> View Description</span>
+                        </div>
+                    </div>
+                    <div style="padding: 12px;">
+                        <h4 style="margin: 0 0 4px 0; font-size: 14px; color: #fff; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${photoTitle}</h4>
+                        <p style="margin: 0; font-size: 12px; color: var(--text-secondary); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; line-height: 1.4;">${photoDesc || 'Click to view full photo & model description...'}</p>
+                    </div>
+                </div>
+            `;
+        });
+    }
+
+    openFormModal('modal-gallery-album-viewer');
+}
+
+function openPhotoDetailLightbox(albumId, photoIndex) {
+    const album = state.gallery.find(g => g.id === albumId);
+    if (!album) return;
+
+    const images = getAlbumImages(album);
+    if (photoIndex < 0 || photoIndex >= images.length) return;
+
+    currentActiveLightboxAlbumId = albumId;
+    currentActiveLightboxPhotoIndex = photoIndex;
+
+    const photo = images[photoIndex];
+
+    document.getElementById('lightbox-photo-img').src = photo.url;
+    document.getElementById('lightbox-photo-counter').textContent = `Photo ${photoIndex + 1} of ${images.length}`;
+    document.getElementById('lightbox-photo-title').textContent = photo.title || `${album.title} (Model Photo ${photoIndex + 1})`;
+    document.getElementById('lightbox-photo-desc').textContent = photo.description || album.desc || 'No specific description provided for this photo model.';
+
+    const btnPrev = document.getElementById('btn-lightbox-prev');
+    const btnNext = document.getElementById('btn-lightbox-next');
+    if (btnPrev) btnPrev.style.display = photoIndex > 0 ? 'flex' : 'none';
+    if (btnNext) btnNext.style.display = photoIndex < images.length - 1 ? 'flex' : 'none';
+
+    openFormModal('modal-photo-detail-lightbox');
+}
+
+function navigatePhotoLightbox(direction) {
+    if (!currentActiveLightboxAlbumId) return;
+    const newIdx = currentActiveLightboxPhotoIndex + direction;
+    openPhotoDetailLightbox(currentActiveLightboxAlbumId, newIdx);
 }
 
 

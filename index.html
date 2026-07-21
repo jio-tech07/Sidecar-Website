@@ -1246,44 +1246,94 @@
         </div>
     </div>
 
-    <!-- Modal: Gallery Item -->
+    <!-- Modal: Manage Gallery Album (Admin) -->
     <div class="modal-overlay" id="modal-gallery">
-        <div class="modal-card">
+        <div class="modal-card" style="max-width: 650px; width: 92%;">
             <button class="close-modal" onclick="closeFormModal('modal-gallery')"><i class="fa-solid fa-xmark"></i></button>
-            <h3 id="modal-gallery-title">Add Gallery Item</h3>
+            <h3 id="modal-gallery-title">Add Gallery Album</h3>
             <form id="form-gallery">
                 <input type="hidden" id="gallery-id">
-                <div class="form-group">
-                    <label for="gallery-title">Title</label>
-                    <input type="text" id="gallery-title" required placeholder="e.g., Premium Tricycle Sidecar">
-                </div>
-                <div class="form-group">
-                    <label for="gallery-category">Category</label>
-                    <select id="gallery-category" required>
-                        <option value="" disabled selected>Select Category</option>
-                        <option value="Custom Sidecar">Custom Sidecar</option>
-                        <option value="Welding Job">Precision Welding</option>
-                        <option value="Repairs & Rebuild">Repairs & Rebuild</option>
-                        <option value="Other Fabrication">Other Metal Work</option>
-                    </select>
-                </div>
-                <div class="form-group">
-                    <label for="gallery-desc">Description</label>
-                    <textarea id="gallery-desc" rows="3" required placeholder="e.g., Heavy-duty passenger sidecar featuring glossy paints and comfort cushioning."></textarea>
-                </div>
-                <div class="form-group">
-                    <label for="gallery-image">Project Image</label>
-                    <div class="image-upload-wrapper">
-                        <div class="image-preview-container" id="gallery-image-preview">
-                            <i class="fa-regular fa-image"></i>
-                            <p>No image chosen</p>
-                        </div>
-                        <input type="file" id="gallery-image" accept="image/*">
-                        <label for="gallery-image" class="btn btn-secondary btn-sm"><i class="fa-solid fa-cloud-arrow-up"></i> Upload Photo</label>
+                <div class="form-row">
+                    <div class="form-group" style="flex: 2;">
+                        <label for="gallery-title">Album Title</label>
+                        <input type="text" id="gallery-title" required placeholder="e.g., Tamiya Sidecar Album">
+                    </div>
+                    <div class="form-group" style="flex: 1;">
+                        <label for="gallery-category">Category</label>
+                        <select id="gallery-category" required>
+                            <option value="" disabled selected>Select Category</option>
+                            <option value="Custom Sidecar">Custom Sidecar</option>
+                            <option value="Precision Welding">Precision Welding</option>
+                            <option value="Repairs & Rebuild">Repairs & Rebuild</option>
+                            <option value="Other Fabrication">Other Metal Work</option>
+                        </select>
                     </div>
                 </div>
-                <button type="submit" class="btn btn-primary btn-block">Save Gallery Item</button>
+                <div class="form-group">
+                    <label for="gallery-desc">Album Overview Description</label>
+                    <textarea id="gallery-desc" rows="2" placeholder="e.g., Collection of Tamiya style sidecars, custom chassis angles, and interior finishes."></textarea>
+                </div>
+
+                <!-- Album Photos Section -->
+                <div class="form-group" style="border-top: 1px solid var(--border-glow); padding-top: 16px; margin-top: 16px;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+                        <label style="margin: 0; font-weight: 700; color: var(--accent);"><i class="fa-solid fa-images"></i> Album Photos & Model Descriptions</label>
+                        <div>
+                            <input type="file" id="gallery-image-input" accept="image/*" style="display: none;" onchange="handleGalleryPhotoUpload(event)">
+                            <label for="gallery-image-input" class="btn btn-secondary btn-xs" style="cursor: pointer; margin: 0;"><i class="fa-solid fa-plus"></i> Add Photo to Album</label>
+                        </div>
+                    </div>
+                    <p style="font-size: 12px; color: var(--text-muted); margin-bottom: 12px;">Upload photos of this sidecar model. The first photo will serve as the Album Cover.</p>
+                    
+                    <div id="album-photos-draft-list" style="display: flex; flex-direction: column; gap: 12px; max-height: 320px; overflow-y: auto; padding-right: 4px;">
+                        <!-- Dynamic photo draft cards rendered here -->
+                    </div>
+                </div>
+
+                <button type="submit" class="btn btn-primary btn-block" style="margin-top: 16px;">Save Album</button>
             </form>
+        </div>
+    </div>
+
+    <!-- Modal: Visitor Gallery Album Viewer -->
+    <div class="modal-overlay" id="modal-gallery-album-viewer">
+        <div class="modal-card" style="max-width: 900px; width: 95%; max-height: 90vh; overflow-y: auto; padding: 24px;">
+            <button class="close-modal" onclick="closeFormModal('modal-gallery-album-viewer')"><i class="fa-solid fa-xmark"></i></button>
+            <div style="margin-bottom: 20px; border-bottom: 1px solid rgba(255,255,255,0.08); padding-bottom: 16px;">
+                <span id="album-viewer-category" class="badge badge-info" style="margin-bottom: 8px; display: inline-block;">Category</span>
+                <h2 id="album-viewer-title" style="margin: 4px 0 8px 0; font-size: 24px; color: #fff;">Album Title</h2>
+                <p id="album-viewer-desc" style="color: var(--text-secondary); font-size: 14px; margin: 0; line-height: 1.5;">Album description summary</p>
+            </div>
+            
+            <p style="font-size: 13px; color: var(--accent); margin-bottom: 16px; font-weight: 600;"><i class="fa-solid fa-hand-pointer"></i> Click any photo below to view model details & specs:</p>
+            <div id="album-viewer-photos-grid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 16px;">
+                <!-- Album photo cards rendered dynamically -->
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal: Photo Model Detail Lightbox -->
+    <div class="modal-overlay" id="modal-photo-detail-lightbox">
+        <div class="modal-card" style="max-width: 850px; width: 95%; padding: 0; overflow: hidden; background: #0f131c; border: 1px solid var(--border-glow);">
+            <button class="close-modal" onclick="closeFormModal('modal-photo-detail-lightbox')" style="z-index: 10; color: #fff; background: rgba(0,0,0,0.6); width: 36px; height: 36px; border-radius: 50%; top: 15px; right: 15px; border: 1px solid rgba(255,255,255,0.2);"><i class="fa-solid fa-xmark"></i></button>
+            
+            <div style="position: relative; background: #000; display: flex; justify-content: center; align-items: center; min-height: 320px; max-height: 500px; overflow: hidden;">
+                <img id="lightbox-photo-img" src="" alt="Sidecar Photo" style="max-width: 100%; max-height: 480px; object-fit: contain; display: block;">
+                
+                <button id="btn-lightbox-prev" onclick="navigatePhotoLightbox(-1)" style="position: absolute; left: 15px; top: 50%; transform: translateY(-50%); background: rgba(0,0,0,0.6); color: #fff; border: 1px solid rgba(255,255,255,0.2); width: 44px; height: 44px; border-radius: 50%; cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 18px; transition: all 0.2s ease;">
+                    <i class="fa-solid fa-chevron-left"></i>
+                </button>
+                <button id="btn-lightbox-next" onclick="navigatePhotoLightbox(1)" style="position: absolute; right: 15px; top: 50%; transform: translateY(-50%); background: rgba(0,0,0,0.6); color: #fff; border: 1px solid rgba(255,255,255,0.2); width: 44px; height: 44px; border-radius: 50%; cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 18px; transition: all 0.2s ease;">
+                    <i class="fa-solid fa-chevron-right"></i>
+                </button>
+                
+                <span id="lightbox-photo-counter" style="position: absolute; bottom: 12px; right: 15px; background: rgba(0,0,0,0.7); color: var(--accent); padding: 4px 10px; border-radius: 12px; font-size: 12px; font-weight: 700; border: 1px solid var(--border-glow);">Photo 1 of 1</span>
+            </div>
+
+            <div style="padding: 20px 24px;">
+                <h3 id="lightbox-photo-title" style="margin: 0 0 8px 0; color: var(--accent); font-size: 20px; font-family: 'Space Grotesk', sans-serif;">Photo Model Title</h3>
+                <p id="lightbox-photo-desc" style="color: var(--text-secondary); font-size: 14px; margin: 0; line-height: 1.6;">Detailed description of this specific sidecar photo model.</p>
+            </div>
         </div>
     </div>
 
@@ -2227,6 +2277,6 @@
     <div id="toast-container" class="toast-container"></div>
 
     <!-- Main Application Scripts -->
-    <script src="app.js?v=4.7.0"></script>
+    <script src="app.js?v=4.8.0"></script>
 </body>
 </html>
